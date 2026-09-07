@@ -1,0 +1,171 @@
+// Portfolio data model — PRD §8.2 / DEV_PLAN §B
+// Conventions:
+// - `order` Int per-scope; uniqueness enforced in reorder endpoints (swap-based)
+// - JSON-ish lists (bullets, tech, section payloads) stored as JSON text (SQLite)
+// - Prisma enums are unsupported on SQLite → role/status are validated strings
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model SiteSettings {
+  id             Int      @id @default(1)
+  name           String
+  role           String   @default("")
+  tagline        String   @default("")
+  avatarPath     String   @default("")
+  faviconPath    String   @default("")
+  resumePath     String   @default("/assets/resume.pdf")
+  contactEmail   String   @default("")
+  primaryColor   String   @default("#4f46e5")
+  accentColor    String   @default("#f59e0b")
+  seoTitle       String   @default("")
+  seoDescription String   @default("")
+  seoOgImagePath String   @default("")
+  // Per-page SEO overrides (ADM-13): JSON map of path → { title?, description?, ogImagePath? }
+  seoOverrides   String   @default("{}")
+  updatedAt      DateTime @updatedAt
+}
+
+model Section {
+  id       Int     @id @default(autoincrement())
+  key      String  @unique
+  title    String
+  subtitle String  @default("")
+  order    Int
+  visible  Boolean @default(true)
+  // Section-specific content (hero/about/contact fields) as JSON text
+  payload  String  @default("{}")
+}
+
+model Skill {
+  id          Int    @id @default(autoincrement())
+  name        String
+  icon        String @default("")
+  category    String @default("General")
+  proficiency Int    @default(3) // 1–5
+  order       Int    @default(0)
+}
+
+model Experience {
+  id        Int     @id @default(autoincrement())
+  company   String
+  role      String
+  location  String  @default("")
+  startDate String // free-form, e.g. "2023-06" — display only, sorting via `order`
+  endDate   String? // null = current
+  bullets   String  @default("[]") // JSON array of strings
+  tech      String  @default("[]") // JSON array of strings
+  logoPath  String  @default("")
+  order     Int     @default(0)
+}
+
+model Project {
+  id            Int        @id @default(autoincrement())
+  title         String
+  slug          String     @unique
+  summary       String     @default("")
+  description   String     @default("")
+  heroImagePath String     @default("")
+  tech          String     @default("[]") // JSON array of strings
+  repoUrl       String     @default("")
+  liveUrl       String     @default("")
+  featured      Boolean    @default(false)
+  order         Int        @default(0)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  reactions     Reaction[]
+  comments      Comment[]
+}
+
+model Education {
+  id          Int     @id @default(autoincrement())
+  institution String
+  degree      String
+  startDate   String
+  endDate     String?
+  notes       String  @default("")
+  order       Int     @default(0)
+}
+
+model SocialLink {
+  id    Int    @id @default(autoincrement())
+  label String
+  url   String
+  icon  String @default("")
+  order Int    @default(0)
+}
+
+model User {
+  id        Int        @id @default(autoincrement())
+  githubId  Int        @unique
+  username  String
+  avatarUrl String     @default("")
+  role      String     @default("USER") // "ADMIN" | "USER" (zod-enforced)
+  createdAt DateTime   @default(now())
+  reactions Reaction[]
+  comments  Comment[]
+}
+
+model Reaction {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  projectId Int
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+}
+
+model Comment {
+  id        Int       @id @default(autoincrement())
+  projectId Int
+  userId    Int
+  body      String
+  createdAt DateTime  @default(now())
+  deletedAt DateTime? // soft delete — public queries filter deletedAt: null
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+}
+
+// Admin-uploaded images (avatar, hero strip, etc.) stored as blobs so runtime
+// uploads work on serverless deploys where public/ is read-only. Served via
+// /api/media/<id> with immutable cache headers (new upload = new id = new URL).
+model Media {
+  id          Int      @id @default(autoincrement())
+  filename    String
+  contentType String
+  sizeBytes   Int
+  data        Bytes
+  createdAt   DateTime @default(now())
+}
+
+model ContactMessage {
+  id             Int       @id @default(autoincrement())
+  name           String
+  email          String
+  message        String
+  emailDelivered Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  readAt         DateTime?
+}
+
+model PageView {
+  id          Int      @id @default(autoincrement())
+  path        String
+  referrer    String   @default("")
+  device      String   @default("")
+  browser     String   @default("")
+  visitorHash String // HMAC(ip + UA, daily salt) — no user FK, no PII
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([path])
+}
