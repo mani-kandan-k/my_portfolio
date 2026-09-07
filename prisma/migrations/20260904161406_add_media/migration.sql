@@ -1,0 +1,9 @@
+-- CreateTable
+CREATE TABLE "Media" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "filename" TEXT NOT NULL,
+    "contentType" TEXT NOT NULL,
+    "sizeBytes" INTEGER NOT NULL,
+    "data" BLOB NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
